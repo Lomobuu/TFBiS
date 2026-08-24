@@ -50,7 +50,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: backend
+        working-directory: terraform/backend
 
     env:
       ARM_USE_OIDC: true
