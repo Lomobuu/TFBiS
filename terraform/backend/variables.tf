@@ -16,6 +16,6 @@ variable "account_name" {
 
 variable "container_name" {
   description = "The name of the container inside the storage account."
-  type    = string
-  default = "tfstate"
+  type        = string
+  default     = "tfstate"
 }
