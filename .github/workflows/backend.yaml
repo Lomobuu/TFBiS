@@ -57,7 +57,6 @@ on:
         description: The ID of the Microsoft Entra tenant to authenticate to.
         required: false
 jobs:
-
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
@@ -102,9 +101,9 @@ jobs:
           optional_args+=(-backend-config="$BACKEND_CONFIG")
         fi
         terraform init -input=false "${optional_args[@]}"
-        
-    outputs:
-      upload-outcome: ${{ steps.upload.outcome }}
+
+      outputs:
+        upload-outcome: ${{ steps.upload.outcome }}
 
     - name: Terraform Apply
     needs: terraform-plan
