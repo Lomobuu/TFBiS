@@ -1,0 +1,301 @@
+name: ♻ terraform
+
+on:
+  workflow_call:
+    inputs:
+      runs_on:
+        description: The label of the runner (GitHub- or self-hosted) to run this workflow on. Defaults to `ubuntu-24.04`.
+        type: string
+        required: false
+        default: ubuntu-24.04
+
+      environment:
+        description: The name of the GitHub environment that this workflow should use for deployments.
+        type: string
+        required: true
+
+      terraform_version:
+        description: The version of Terraform to install.
+        type: string
+        required: false
+        default: latest
+
+      working_directory:
+        description: The working directory to run the Terraform commands in.
+        type: string
+        required: false
+        default: "."
+
+      backend_config:
+        description: The path, relative to the working directory, of a configuration file (`.tfbackend`) containing the remaining arguments for a partial backend configuration.
+        type: string
+        required: false
+
+      var_file:
+        description: The path, relative to the working directory, of a variable definitions file (`.tfvars`) containing values for variables declared in the root module.
+        type: string
+        required: false
+
+      artifact_name:
+        description: The name of the artifact to upload. If not specified, an artifact name will be generated based on the environment name.
+        type: string
+        required: false
+
+
+      artifact_retention_days:
+        description: Number of days to retain the uploaded plan artifact. The artifact contains the encrypted Terraform configuration and plan, and is only consumed by the Apply job in the same workflow run. Keep this low to limit the exposure window if `ENCRYPTION_PASSWORD` ever leaks.
+        type: number
+        required: false
+        default: 5
+
+      run_terraform_plan:
+        description: Run `terraform plan`? Defaults to `false` if the workflow was triggered by Dependabot, else `true`.
+        type: boolean
+        required: false
+        default: ${{ github.actor != 'dependabot[bot]' }}
+
+      run_terraform_apply:
+        description: Run `terraform apply` for the saved plan file?
+        type: boolean
+        required: false
+        default: true
+
+    secrets:
+      AZURE_CLIENT_ID:
+        description: The client ID of the service principal to use for authenticating to Azure.
+        required: false
+
+      AZURE_SUBSCRIPTION_ID:
+        description: The ID of the Azure subscription to authenticate to.
+        required: false
+
+      AZURE_TENANT_ID:
+        description: The ID of the Microsoft Entra tenant to authenticate to.
+        required: false
+
+      ENCRYPTION_PASSWORD:
+        description: A password used to encrypt the archive containing the Terraform configuration and plan file. Passed via `secrets:` so GitHub auto-masks it in all logs.
+        required: true
+
+# Queue jobs that target the same state file, i.e. the same working directory and backend configuration.
+concurrency:
+  group: terraform-${{ inputs.working_directory }}-${{ inputs.backend_config }}
+  cancel-in-progress: false
+
+env:
+  # Configure Terraform to run in automation.
+  # Makes output more consistent and less confusing in workflows where users don't directly execute Terraform commands.
+  # Ref: https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform#controlling-terraform-output-in-automation
+  TF_IN_AUTOMATION: true
+
+  # OIDC Azure Connection
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+  # Artifact & Plan Configuration
+  LOCK_FILE: .terraform.lock.hcl
+  PLAN_FILE: tfplan
+  TARBALL: terraform.tar.gpg
+  ARTIFACT_NAME: ${{ inputs.artifact_name || format('terraform-{0}', inputs.environment) }}
+
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ${{ inputs.runs_on }}
+    environment:
+      name: ${{ case(inputs.run_terraform_plan, inputs.environment, '') }}
+      deployment: false
+    permissions:
+      contents: read # Required to checkout the repository
+      id-token: write # Required to authenticate to Azure with OIDC
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+    env:
+      # The SSH_PRIVATE_KEY secret must be set as a job-level environment variable before it can be used in an "if:" conditional.
+      # Ref: https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets#using-secrets-in-a-workflow
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: false
+          # Wraps Terraform commands, exposing their stdout, stderr and exitcode.
+          # It also wraps Terraform command outputs with debug logs, including the output of the "terraform show" command.
+          # The "show" command is used to create a GitHub job summary containing the generated plan in a human-readable format.
+          # If the wrapper is enabled, the debug logs will be visible in the job summary.
+          # The wrapper must be disabled to prevent this.
+
+      - name: Run Terraform Format
+        id: fmt
+        # Start Bash without fail-fast behavior.
+        # Required in order to check exitcode.
+        # Ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#exit-codes-and-error-action-preference
+        shell: bash {0}
+        continue-on-error: true # Formatting errors should not prevent the job from running.
+        run: |
+          terraform fmt -check
+          exitcode=$?
+          echo "exitcode=$exitcode" >> "$GITHUB_OUTPUT"
+          exit "$exitcode"
+
+      - name: Run Terraform Init
+        id: init
+        env:
+          RUN_TERRAFORM_PLAN: ${{ inputs.run_terraform_plan }}
+          BACKEND_CONFIG: ${{ inputs.backend_config }}
+        run: |
+          optional_args=()
+          if [[ "$RUN_TERRAFORM_PLAN" == "false" ]]; then
+            optional_args+=(-backend=false)
+          elif [[ -n "$BACKEND_CONFIG" ]]; then
+            optional_args+=(-backend-config="$BACKEND_CONFIG")
+          fi
+          terraform init -input=false "${optional_args[@]}"
+
+      - name: Run Terraform Validate
+        id: validate
+        run: terraform validate
+
+      # Create Terraform plan file.
+      # This file contains the full configuration, including sensitive data.
+      # As a result, it should be treated as a potentially-sensitive artifact.
+      # Ref: https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform#plan-and-apply-on-different-machines
+      - name: Run Terraform Plan
+        id: plan
+        if: inputs.run_terraform_plan
+        # Start Bash without fail-fast behavior.
+        # Required in order to check exitcode.
+        # Ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#exit-codes-and-error-action-preference
+        shell: bash {0}
+        env:
+          VAR_FILE: ${{ inputs.var_file }}
+        run: |
+          optional_args=()
+          if [[ -n "$VAR_FILE" ]]; then
+            optional_args+=(-var-file="$VAR_FILE")
+          fi
+          terraform plan -out="$PLAN_FILE" -input=false -detailed-exitcode "${optional_args[@]}"
+          exitcode=$?
+          if [[ "$exitcode" == 1 ]]; then
+            exit "$exitcode"
+          fi
+          echo "exitcode=$exitcode" >> "$GITHUB_OUTPUT"
+
+      - name: Create tarball
+        id: tar
+        # Only run if Terraform Plan succeeded with non-empty diff (changes present).
+        if: steps.plan.outputs.exitcode == 2
+        env:
+          ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
+        run: |
+          tarball_path="$RUNNER_TEMP/$TARBALL"
+          tar -c . | gpg -c --batch --passphrase "$ENCRYPTION_PASSWORD" -o "$tarball_path"
+          echo "tarball_path=$tarball_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        id: upload
+        if: steps.tar.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ steps.tar.outputs.tarball_path }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Create job summary
+        # Only run if Terraform Plan succeeded with non-empty diff (changes present).
+        # Ref: https://developer.hashicorp.com/terraform/cli/commands/plan#detailed-exitcode
+        if: steps.fmt.outputs.exitcode != 0 || steps.plan.outputs.exitcode == 2
+        # Failure to create a job summary should not stall the workflow.
+        continue-on-error: true
+        shell: bash {0}
+        env:
+          TF_FMT_OUTCOME: ${{ steps.fmt.outcome }}
+          TF_INIT_OUTCOME: ${{ steps.init.outcome }}
+          TF_VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          TF_PLAN_OUTCOME: ${{ steps.plan.outcome }}
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        # Some plans are too large to be stored in environment variables or step outputs, resulting in an error.
+        # To bypass this, the plan must be explicitly read during this step using the "terraform show" command.
+        run: |
+          tfplan=$(terraform show "$PLAN_FILE" -no-color)
+
+          plan_summary=$(echo "$tfplan" | tail -2)
+          plan_import=$(echo "$plan_summary" | grep -oE '[0-9]+ to import' | grep -oE '[0-9]+' || echo "0")
+          plan_add=$(echo "$plan_summary" | grep -oE '[0-9]+ to add' | grep -oE '[0-9]+' || echo "Failed")
+          plan_change=$(echo "$plan_summary" | grep -oE '[0-9]+ to change' | grep -oE '[0-9]+' || echo "Failed")
+          plan_destroy=$(echo "$plan_summary" | grep -oE '[0-9]+ to destroy' | grep -oE '[0-9]+' || echo "Failed")
+
+          echo "#### Terraform Format and Style 🖌\`$TF_FMT_OUTCOME\`
+          #### Terraform Initialization ⚙\`$TF_INIT_OUTCOME\`
+          #### Terraform Validation 🤖\`$TF_VALIDATE_OUTCOME\`
+          #### Terraform Plan 📖\`$TF_PLAN_OUTCOME\`
+
+          | Add ➕ | Change 🔄 | Destroy 🗑️ | Import 📥 |
+          |---|---|---|---|
+          | $plan_add | $plan_change | $plan_destroy | $plan_import |
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`terraform
+          $tfplan
+          \`\`\`
+
+          </details>
+
+          *Pusher: @$GITHUB_ACTOR, Action: \`$GITHUB_EVENT_NAME\`, Working Directory: \`$WORKING_DIRECTORY\`, Workflow: \`$GITHUB_WORKFLOW\`*" >> "$GITHUB_STEP_SUMMARY"
+
+    outputs:
+      upload-outcome: ${{ steps.upload.outcome }}
+
+  terraform-apply:
+    name: Terraform Apply
+    needs: terraform-plan
+    if: needs.terraform-plan.outputs.upload-outcome == 'success' && inputs.run_terraform_apply
+    runs-on: ${{ inputs.runs_on }}
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read # Required to checkout the repository
+      id-token: write # Required to authenticate to Azure with OIDC
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ inputs.working_directory }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: false
+
+      - name: Extract tarball
+        env:
+          ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
+        run: |
+          gpg -d --batch --passphrase "$ENCRYPTION_PASSWORD" "$TARBALL" | tar -x
+          rm "$TARBALL"
+
+      - name: Run Terraform Apply
+        run: terraform apply -input=false "$PLAN_FILE"
