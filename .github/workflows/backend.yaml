@@ -104,8 +104,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: backend/tfplan
-          if-no-files-found: error
+          path: terraform/backend/tfplan
           retention-days: 1
 
   terraform-apply:
