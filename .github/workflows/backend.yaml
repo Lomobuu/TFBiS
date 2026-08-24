@@ -1,45 +1,33 @@
-name: ♻ backend
+name: ♻ Backend
 
 on:
   workflow_dispatch:
     inputs:
       runs_on:
-        description: The label of the runner to use.
+        description: Runner to use
         type: string
         required: false
         default: ubuntu-24.04
 
       environment:
-        description: The GitHub environment to use for deployments.
+        description: Deployment environment (test/prod)
         type: string
         required: true
 
       terraform_version:
-        description: The version of Terraform to install.
+        description: Terraform version
         type: string
         required: false
         default: latest
 
-      working_directory:
-        description: The directory containing the Terraform configuration.
-        type: string
-        required: false
-        default: "."
-
-      backend_config:
-        description: Path to the partial backend configuration file.
-        type: string
-        required: false
-        default: "backend-configs/backend.tfbackend"
-
       run_terraform_plan:
-        description: Run terraform plan?
+        description: Run terraform plan
         type: boolean
         required: false
         default: true
 
       run_terraform_apply:
-        description: Run terraform apply using the saved plan?
+        description: Run terraform apply
         type: boolean
         required: false
         default: true
@@ -48,7 +36,7 @@ jobs:
   terraform-plan:
     name: Terraform Plan
 
-    if: ${{ inputs.run_terraform_plan && github.actor != 'dependabot[bot]' }}
+    if: ${{ inputs.run_terraform_plan }}
 
     runs-on: ${{ inputs.runs_on }}
 
@@ -62,8 +50,13 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ${{ inputs.working_directory }}
+        working-directory: backend
 
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     outputs:
       upload-outcome: ${{ steps.upload.outcome }}
@@ -71,28 +64,43 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform_version }}
 
-      - name: Log in to Azure
+      - name: Debug Azure Secrets
+        run: |
+          echo "CLIENT_ID=${{ secrets.AZURE_CLIENT_ID != '' }}"
+          echo "TENANT_ID=${{ secrets.AZURE_TENANT_ID != '' }}"
+          echo "SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID != '' }}"
+
+      - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Debug Working Directory
+        run: |
+          echo "Current directory:"
+          pwd
+
+          echo ""
+          echo "Terraform files:"
+          ls -la
+
+          echo ""
+          echo "Backend configs:"
+          ls -la ../backend-config
+
       - name: Terraform Init
         run: |
-          if [ -n "${{ inputs.backend_config }}" ]; then
-            BACKEND_FILE="${{ inputs.backend_config }}"
-          else
-            BACKEND_FILE="backend-${{ inputs.environment }}.tfbackend"
-          fi
+          BACKEND_FILE="../backend-config/backend-${{ inputs.environment }}.tfbackend"
+
+          echo "Using backend: $BACKEND_FILE"
 
           terraform init \
             -input=false \
@@ -115,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: ${{ inputs.working_directory }}/tfplan
+          path: backend/tfplan
           if-no-files-found: error
           retention-days: 1
 
@@ -125,11 +133,9 @@ jobs:
     needs:
       - terraform-plan
 
-    if: >-
-      ${{
-        inputs.run_terraform_apply &&
-        needs.terraform-plan.outputs.upload-outcome == 'success'
-      }}
+    if: |
+      needs.terraform-plan.outputs.upload-outcome == 'success' &&
+      inputs.run_terraform_apply
 
     runs-on: ${{ inputs.runs_on }}
 
@@ -143,20 +149,24 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ${{ inputs.working_directory }}
+        working-directory: backend
+
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform_version }}
 
-      - name: Log in to Azure
+      - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -164,24 +174,18 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
-        env:
-          BACKEND_CONFIG: ${{ inputs.backend_config }}
         run: |
-          optional_args=()
-
-          if [[ -n "$BACKEND_CONFIG" ]]; then
-            optional_args+=("-backend-config=$BACKEND_CONFIG")
-          fi
+          BACKEND_FILE="../backend-config/backend-${{ inputs.environment }}.tfbackend"
 
           terraform init \
             -input=false \
-            "${optional_args[@]}"
+            -backend-config="$BACKEND_FILE"
 
       - name: Download Terraform Plan
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
-          path: ${{ inputs.working_directory }}
+          path: backend
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve tfplan
