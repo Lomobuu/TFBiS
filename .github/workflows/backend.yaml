@@ -135,7 +135,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: inputs.working_directory
+        working-directory: ${{ inputs.working_directory }}
 
     env:
       ARM_USE_OIDC: true
