@@ -25,7 +25,7 @@ on:
         description: The working directory to run the Terraform commands in.
         type: string
         required: false
-        default: "terraform"
+        default: "terraform/environment/dev"
 
       backend_config:
         description: The path, relative to the working directory, of a configuration file (`.tfbackend`) containing the remaining arguments for a partial backend configuration.
