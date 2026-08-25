@@ -32,6 +32,12 @@ on:
         required: false
         default: true
 
+      working_directory:
+        description: The working directory to run the Terraform commands in.
+        type: string
+        required: false
+        default: "terraform/backend"
+
 jobs:
   terraform-plan:
     name: Terraform Plan
@@ -50,7 +56,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: terraform/backend
+        working-directory: ${{ inputs.working_directory }}
 
     env:
       ARM_USE_OIDC: true
@@ -129,7 +135,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: backend
+        working-directory: inputs.working_directory
 
     env:
       ARM_USE_OIDC: true
