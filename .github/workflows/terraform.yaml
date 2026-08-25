@@ -25,7 +25,7 @@ on:
         description: The working directory to run the Terraform commands in.
         type: string
         required: false
-        default: "."
+        default: "terraform"
 
       backend_config:
         description: The path, relative to the working directory, of a configuration file (`.tfbackend`) containing the remaining arguments for a partial backend configuration.
@@ -53,7 +53,7 @@ on:
         description: Run `terraform plan`? Defaults to `false` if the workflow was triggered by Dependabot, else `true`.
         type: boolean
         required: false
-        default: ${{ github.actor != 'dependabot[bot]' }}
+        default: true
 
       run_terraform_apply:
         description: Run `terraform apply` for the saved plan file?
