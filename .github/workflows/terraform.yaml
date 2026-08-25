@@ -1,7 +1,8 @@
 name: ♻ terraform
 
 on:
-  workflow_call:
+  workflow_dispatch:
+  # workflow_call: # TODO: How?
     inputs:
       runs_on:
         description: The label of the runner (GitHub- or self-hosted) to run this workflow on. Defaults to `ubuntu-24.04`.
