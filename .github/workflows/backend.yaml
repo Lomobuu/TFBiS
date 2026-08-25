@@ -110,7 +110,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: terraform/backend/tfplan
+          path: terraform/backend
           retention-days: 1
 
   terraform-apply:
@@ -171,7 +171,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan
-          path: terraform/backend/tfplan
+          path: terraform/backend
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve tfplan
