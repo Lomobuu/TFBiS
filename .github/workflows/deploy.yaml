@@ -42,8 +42,8 @@ jobs:
             working_directory: terraform/environment/prod
             backend_config: ../../backend-configs/backend-prod.tfbackend
 
-    # Path is relative to THIS file's location: .github/workflows/deploy.yml
-    uses: ./.github/workflows/terraform.yml
+    # Path is relative to THIS file's location: .github/workflows/deploy.yaml
+    uses: ./.github/workflows/terraform.yaml
     with:
       environment: ${{ matrix.environment }}
       working_directory: ${{ matrix.working_directory }}
