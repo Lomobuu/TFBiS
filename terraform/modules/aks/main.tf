@@ -7,7 +7,7 @@ module "aks" {
   location            = var.location
   tags = var.tags
 
-  ### DNS — exactly one is non-null (enforced by validation on dns_prefix)
+  ### DNS, exactly one is non-null (enforced by validation on dns_prefix)
   dns_prefix                 = var.dns_prefix
   dns_prefix_private_cluster = var.dns_prefix_private_cluster
 
@@ -27,7 +27,7 @@ module "aks" {
   ### Node provisioning (null = omit block; created module defaults to Manual)
   node_provisioning_profile = var.node_provisioning_profile
 
-  ### Identity OR service principal — exactly one (enforced by created module)
+  ### Identity OR service principal, exactly one (enforced by created module)
   identity          = var.identity
   service_principal = var.service_principal
 

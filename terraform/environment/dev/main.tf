@@ -26,7 +26,7 @@ module "aks" {
   # Public cluster pick exactly one DNS option
   dns_prefix = "aks-myapp-dev"
 
-  # Environment-specific node sizing (strict object → all fields required)
+  # Environment-specific node sizing
   default_node_pool = {
     name                         = "system"
     vm_size                      = "Standard_D2s_v5"

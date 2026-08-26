@@ -9,6 +9,6 @@ terraform {
   }
 
   backend "azurerm" {
-    # left empty on purpose — values are injected via -backend-config
+    # left empty on purpose, values are injected via -backend-config
   }
 }

@@ -21,7 +21,7 @@ variable "tags" {
   default     = {}
 }
 
-### DNS — set exactly one of the two (created module enforces via precondition)
+### DNS set exactly one of the two (created module enforces via precondition)
 
 variable "dns_prefix" {
   description = "DNS prefix for a public cluster. Set this OR dns_prefix_private_cluster."
@@ -81,7 +81,7 @@ variable "role_based_access_control_enabled" {
   default     = true
 }
 
-### Default (system) node pool — STRICT object, complete default
+### Default (system) node pool
 # Per-environment overrides MUST supply every field below (set unused ones
 # to null). Fields you'll almost always set: name, vm_size, and the
 # autoscaling trio (auto_scaling_enabled / min_count / max_count) or node_count.
@@ -139,17 +139,18 @@ variable "default_node_pool" {
   }
 }
 
-# Node provisioning profile (null = omit block;)
+# Node provisioning profile 
 
 variable "node_provisioning_profile" {
-  description = "Node provisioning profile. mode = 'Manual' or 'Auto' (Node Auto Provisioning). null = omit."
+  description = "Node provisioning profile. mode = 'Manual' or 'Auto'."
   type = object({
     mode = string
   })
-  default = null
+  default  = { mode = "Manual" }
+  nullable = false
 }
 
-### Identity OR service principal — set exactly one
+### Identity OR service principal, set exactly one
 
 variable "identity" {
   description = "Managed identity block. Set this OR service_principal."
@@ -172,7 +173,7 @@ variable "service_principal" {
   default = null
 }
 
-### Entra ID (AAD) integration for Kubernetes RBAC — STRICT object, complete default
+### Entra ID (AAD) integration for Kubernetes RBAC
 
 variable "aad_rbac_enabled" {
   description = "Enable Entra ID integration for Kubernetes RBAC."
