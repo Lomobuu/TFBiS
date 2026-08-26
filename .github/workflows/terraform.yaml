@@ -31,6 +31,7 @@ on:
         description: The path, relative to the working directory, of a configuration file (`.tfbackend`) containing the remaining arguments for a partial backend configuration.
         type: string
         required: false
+        default: "terraform/backend-configs"
 
       var_file:
         description: The path, relative to the working directory, of a variable definitions file (`.tfvars`) containing values for variables declared in the root module.

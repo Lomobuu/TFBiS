@@ -29,7 +29,7 @@ module "aks" {
   # Prod sizing
   default_node_pool = {
     name                         = "system"
-    vm_size                      = "Standard_D2s_v5"
+    vm_size                      = "Standard_L2s_v4" # was Standard_D2s_v5
     type                         = "VirtualMachineScaleSets"
     node_count                   = null
     auto_scaling_enabled         = true
