@@ -1,0 +1,54 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/environment/**"
+      - "terraform/modules/**"
+      - "terraform/backend-configs/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/environment/**"
+      - "terraform/modules/**"
+  workflow_dispatch:
+    inputs:
+      run_terraform_apply:
+        description: >
+          Run `terraform apply` for the saved plan file, after environment approval?
+          On pull requests this is always forced to `false` regardless of this input.
+        type: boolean
+        required: false
+        default: true
+
+jobs:
+  terraform:
+    name: ${{ matrix.environment }}
+    strategy:
+      # fail-fast: false ensures the 3 environments run independently in parallel —
+      # one environment failing (or sitting in "waiting for approval") never
+      # cancels or blocks the other two.
+      fail-fast: false
+      matrix:
+        include:
+          - environment: dev
+            working_directory: terraform/environment/dev
+            backend_config: ../../backend-configs/backend-dev.tfbackend
+          - environment: test
+            working_directory: terraform/environment/test
+            backend_config: ../../backend-configs/backend-test.tfbackend
+          - environment: prod
+            working_directory: terraform/environment/prod
+            backend_config: ../../backend-configs/backend-prod.tfbackend
+
+    # Path is relative to THIS file's location: .github/workflows/deploy.yml
+    uses: ./.github/workflows/terraform.yml
+    with:
+      environment: ${{ matrix.environment }}
+      working_directory: ${{ matrix.working_directory }}
+      backend_config: ${{ matrix.backend_config }}
+      # Pull requests only ever plan (no apply). Pushes/manual runs apply
+      # only after the environment's required reviewers approve.
+      run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
+    secrets: inherit
