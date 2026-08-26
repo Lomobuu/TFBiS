@@ -25,10 +25,10 @@ on:
 jobs:
   terraform:
     name: ${{ matrix.environment }}
+    permissions:
+      contents: read   # Required to checkout the repository
+      id-token: write  # Required to authenticate to Azure with OIDC
     strategy:
-      # fail-fast: false ensures the 3 environments run independently in parallel —
-      # one environment failing (or sitting in "waiting for approval") never
-      # cancels or blocks the other two.
       fail-fast: false
       matrix:
         include:
