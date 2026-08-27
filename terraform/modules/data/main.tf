@@ -10,5 +10,6 @@ module "storage" {
   location                   = var.location
 
   is_hns_enabled = true
+  shared_access_key_enabled = true
 
 }
