@@ -7,11 +7,13 @@ on:
       - "terraform/environment/**"
       - "terraform/modules/**"
       - "terraform/backend-configs/**"
+
   pull_request:
     branches: [main]
     paths:
       - "terraform/environment/**"
       - "terraform/modules/**"
+
   workflow_dispatch:
     inputs:
       run_terraform_apply:
@@ -24,31 +26,17 @@ on:
 
 jobs:
   terraform:
-    name: ${{ matrix.environment }}
+    name: dev
     permissions:
-      contents: read   # Required to checkout the repository
-      id-token: write  # Required to authenticate to Azure with OIDC
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - environment: dev
-            working_directory: terraform/environment/dev
-            backend_config: ../../backend-configs/backend-dev.tfbackend
-          - environment: test
-            working_directory: terraform/environment/test
-            backend_config: ../../backend-configs/backend-test.tfbackend
-          - environment: prod
-            working_directory: terraform/environment/prod
-            backend_config: ../../backend-configs/backend-prod.tfbackend
+      contents: read
+      id-token: write
 
-    # Path is relative to THIS file's location: .github/workflows/deploy.yaml
     uses: ./.github/workflows/terraform.yaml
+
     with:
-      environment: ${{ matrix.environment }}
-      working_directory: ${{ matrix.working_directory }}
-      backend_config: ${{ matrix.backend_config }}
-      # Pull requests only ever plan (no apply). Pushes/manual runs apply
-      # only after the environment's required reviewers approve.
+      environment: dev
+      working_directory: terraform/environment/dev
+      backend_config: ../../backend-configs/backend-dev.tfbackend
       run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
+
     secrets: inherit
