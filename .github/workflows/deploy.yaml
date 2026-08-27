@@ -3,30 +3,22 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths:
-      - "terraform/environment/**"
-      - "terraform/modules/**"
-      - "terraform/backend-configs/**"
 
   pull_request:
     branches: [main]
-    paths:
-      - "terraform/environment/**"
-      - "terraform/modules/**"
 
   workflow_dispatch:
     inputs:
       run_terraform_apply:
         description: >
-          Run `terraform apply` for the saved plan file, after environment approval?
-          On pull requests this is always forced to `false` regardless of this input.
+          Run terraform apply after approval
         type: boolean
         required: false
         default: true
 
 jobs:
-  terraform:
-    name: dev
+  dev:
+    name: Dev
     permissions:
       contents: read
       id-token: write
@@ -37,6 +29,38 @@ jobs:
       environment: dev
       working_directory: terraform/environment/dev
       backend_config: ../../backend-configs/backend-dev.tfbackend
+      run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
+
+    secrets: inherit
+
+  test:
+    name: Test
+    permissions:
+      contents: read
+      id-token: write
+
+    uses: ./.github/workflows/terraform.yaml
+
+    with:
+      environment: test
+      working_directory: terraform/environment/test
+      backend_config: ../../backend-configs/backend-test.tfbackend
+      run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
+
+    secrets: inherit
+
+  prod:
+    name: Prod
+    permissions:
+      contents: read
+      id-token: write
+
+    uses: ./.github/workflows/terraform.yaml
+
+    with:
+      environment: prod
+      working_directory: terraform/environment/prod
+      backend_config: ../../backend-configs/backend-prod.tfbackend
       run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
 
     secrets: inherit
