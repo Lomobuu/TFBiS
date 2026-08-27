@@ -17,8 +17,8 @@ on:
         default: true
 
 jobs:
-  dev:
-    name: Dev
+  a_dev:
+    name: 01 Dev
     permissions:
       contents: read
       id-token: write
@@ -29,12 +29,12 @@ jobs:
       environment: dev
       working_directory: terraform/environment/dev
       backend_config: ../../backend-configs/backend-dev.tfbackend
-      run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
+      run_terraform_apply: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_terraform_apply) }}
 
     secrets: inherit
 
-  test:
-    name: Test
+  b_test:
+    name: 02 Test
     permissions:
       contents: read
       id-token: write
@@ -45,12 +45,12 @@ jobs:
       environment: test
       working_directory: terraform/environment/test
       backend_config: ../../backend-configs/backend-test.tfbackend
-      run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
+      run_terraform_apply: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_terraform_apply) }}
 
     secrets: inherit
 
-  prod:
-    name: Prod
+  c_prod:
+    name: 03 Prod
     permissions:
       contents: read
       id-token: write
@@ -61,6 +61,6 @@ jobs:
       environment: prod
       working_directory: terraform/environment/prod
       backend_config: ../../backend-configs/backend-prod.tfbackend
-      run_terraform_apply: ${{ github.event_name != 'pull_request' && inputs.run_terraform_apply != false }}
+      run_terraform_apply: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_terraform_apply) }}
 
     secrets: inherit
