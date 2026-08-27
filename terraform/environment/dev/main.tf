@@ -28,7 +28,7 @@ module "aks" {
 
   # Environment-specific node sizing
   default_node_pool = {
-    name                         = "system"
+    name                         = "node_pool_name"
     vm_size                      = "Standard_L2s_v4" # was Standard_D2s_v5
     type                         = "VirtualMachineScaleSets"
     node_count                   = null
