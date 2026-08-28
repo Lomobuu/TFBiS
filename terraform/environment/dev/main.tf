@@ -36,7 +36,7 @@ module "keyvault" {
   }
 }
 
-#### Managed Identity for Key Vault access via Workload Identity
+### Managed Identity for Key Vault access via Workload Identity
 resource "azurerm_user_assigned_identity" "keyvault_workload" {
   name                = "id-keyvault-workload-dev"
   resource_group_name = data.azurerm_resource_group.this.name
