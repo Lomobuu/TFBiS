@@ -32,6 +32,7 @@ module "keyvault" {
   tags = {
     Environment = "dev"
     ManagedBy   = "Terraform"
+    newtag      = "tagtest"
   }
 }
 
