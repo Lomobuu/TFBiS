@@ -18,7 +18,7 @@ module "data" {
 
 ### Key Vault
 module "keyvault" {
-  source = "../../modules/keyvault"
+  source = "../../modules/shared"
 
   name                = "kv-${random_id.this.hex}" # or your own naming convention
   resource_group_name = data.azurerm_resource_group.this.name
@@ -29,7 +29,10 @@ module "keyvault" {
   purge_protection_enabled    = true
   enabled_for_disk_encryption = false
 
-  tags = local.tags
+  tags = {
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
 }
 
 
