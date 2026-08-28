@@ -220,7 +220,7 @@ jobs:
           elif [[ -n "$BACKEND_CONFIG" ]]; then
             optional_args+=(-backend-config="$BACKEND_CONFIG")
           fi
-          terraform init -input=false "${optional_args[@]}"
+          terraform init -input=false -reconfigure "${optional_args[@]}"
 
       - name: Run Terraform Validate
         id: validate
