@@ -15,6 +15,24 @@ module "data" {
   location            = local.location
 }
 
+
+### Key Vault
+module "keyvault" {
+  source = "../../modules/keyvault"
+
+  name                = "kv-${random_id.this.hex}" # or your own naming convention
+  resource_group_name = data.azurerm_resource_group.this.name
+  location            = local.location
+  sku_name            = "standard"
+  rbac_authorization_enabled  = true
+  soft_delete_retention_days  = 90
+  purge_protection_enabled    = true
+  enabled_for_disk_encryption = false
+
+  tags = local.tags
+}
+
+
 ### AKS
 module "aks" {
   source = "../../modules/aks"
