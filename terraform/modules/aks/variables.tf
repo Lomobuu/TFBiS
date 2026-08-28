@@ -150,6 +150,18 @@ variable "node_provisioning_profile" {
   nullable = false
 }
 
+### Upgrade settings
+
+variable "upgrade_settings" {
+  description = "Node pool upgrade settings"
+  type = object({
+    max_surge                     = optional(string, "10%")
+    drain_timeout_in_minutes      = optional(number, 0)
+    node_soak_duration_in_minutes = optional(number, 0)
+  })
+  default = {}
+}
+
 ### Identity OR service principal, set exactly one
 
 variable "identity" {

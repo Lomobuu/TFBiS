@@ -27,6 +27,9 @@ module "aks" {
   ### Node provisioning (null = omit block; created module defaults to Manual)
   node_provisioning_profile = var.node_provisioning_profile
 
+  ### Upgrade Settings (resets to default if not added)
+  upgrade_settings = var.upgrade_settings
+
   ### Identity OR service principal, exactly one (enforced by created module)
   identity          = var.identity
   service_principal = var.service_principal
