@@ -35,6 +35,20 @@ module "keyvault" {
   }
 }
 
+#### Managed Identity for Key Vault access via Workload Identity
+resource "azurerm_user_assigned_identity" "keyvault_workload" {
+  name                = "id-keyvault-workload-dev"
+  resource_group_name = data.azurerm_resource_group.this.name
+  location            = local.location
+}
+
+resource "azurerm_role_assignment" "keyvault_secrets_user" {
+  scope                = module.keyvault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.keyvault_workload.principal_id
+}
+
+
 
 ### AKS
 module "aks" {
@@ -46,6 +60,8 @@ module "aks" {
 
   # Public cluster pick exactly one DNS option
   dns_prefix = "aks-myapp-dev"
+  oidc_issuer_enabled = true
+  workload_identity_enabled = true
 
   # Environment-specific node sizing
   default_node_pool = {
