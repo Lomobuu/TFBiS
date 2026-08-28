@@ -20,7 +20,7 @@ module "data" {
 module "keyvault" {
   source = "../../modules/shared"
 
-  name                = "kv-${random_id.this.hex}" # or your own naming convention
+  name                = "kv-myapp-dev" # or your own naming convention
   resource_group_name = data.azurerm_resource_group.this.name
   location            = local.location
   sku_name            = "standard"
